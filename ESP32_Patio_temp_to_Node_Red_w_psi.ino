@@ -1,71 +1,59 @@
 /******************************************************************************************************
  * This program was written with the intent to measure temperature and humidity using an Espresif ESP32,
- * a DHT Temperature and Humidity sensor, and a power supply set to 3.3V. The program sends data to
- * the serial monitor and an MQTT server using specific topics. In this case the MQTT server is setup
- * on a raspberry pi or Linux PC. 
+ * a BME280 Temperature, Humidity, and Pressure sensor, and a power supply set to 3.3V. The program 
+ * sends data to the serial monitor and an MQTT server using specific topics. In this case the MQTT 
+ * server is setup on a raspberry pi or Linux PC. 
  * 
  * Parts needed for this program:
- * -Esp Dev Module
- * -DHT Temp and Hum Sensor
- * -7-12VDC to 3.3/5V power supply with both jumpers set to "3.3V"
- * -1k Ohm Resistor(Brown/Black/Red)
- * -Yellow LED
- * -Photoresistor
- * -7 male to male jumper wires
+ * -ESP32 DevKit V1 Module
+ * -BME280 Temp, Hum, and PSI Sensor
+ * -7-12VDC to 3.3/5V power supply with both jumpers set to "3.3V" or a mirco USB cable with a 1A or higher power adapter.
+ * -4 male to male jumper wires
  * -1 mini(400 pin solderless) bread board
- * -7-12VDC Power supply
  * 
- * Wiring (Refers to the position on the breadboard(Rows(1-30) and Columns(a-j, +, -))):
- * ESP32 pressed into column a and i rows 16-30
- * DHT pressed into column j rows 10-12
- * Power supply pressed into (+) and (-) on both sides, rows 1-5
- * Long side of the LED pressed into b13
- * Short side of the LED pressed into b10
- * One side of the photoresistor pressed into a6 and the other pressed into (+)
- * One side of the resistor pressed into b6 and the other side pressed into (-)(Use a 1k Ohm resistor with the photoresistor when used in direct sunlight, a 4.7k Ohm can be used when inside)
- * Jumper wire from e6 to e19(Pin D34 on the ESP32)(Wire must be put into e19 and bent 90*, then the EWSP32 goes on top of it)
- * One side of the resistor pressed into a10 and the other side pressed into (-)
- * Jumper wire from (+) to j30(Pin 3V3 on the ESP32)
- * Jumper wire from (-) to j29(Pin GND on the ESP32)
- * Jumper wire from f10(DHT(-)) to (-)
- * Jumper wire from f11(DHT('out") to j21(Pin D19 on ESP32)
- * Jumper wire from f12(DHT(+)) to (+)
- * Jumper wire from e13 to j23(Pin D5 on the ESP32)
+ * Wiring up the project:
+ * Note: The bread board rows are shorted together on the right(columns a-e) and left(columns f-j) sides. The right and left sides of the bread board are not shorted together.
+ * ESP32 pressed into the bread board.
+ * BME280 pressed into the breadboard.
+ * Power supply pressed into the (+) and (-) of the bread board. Note: If the power supply if connected on the "bottom" of the bread board, the polarity marked on the bread board will be incorrect.
+ * If using the power supply to power the project:
+ *   Jumper wire from (+) on the breadboard to the pin labeled VIN on the ESP32.
+ *   Jumper wire from (-) on the breadboard to the pin labeled GND on the ESP32.
+ * Jumper wire from the pin labeled 3V3 on ESP to "VCC" on the BME sensor.
+ * Jumper wire from the pin lebeled GND on ESP to "GMD" on the BME sensor.
+ * Jumper wire from the pin labeled D21(SDA) on ESP to "SDA" on the BME sensor.
+ * Jumper wire from the pin labeled D22(SCL) on ESP to "SCL" on the BME sensor.
+ * If using an LED to show when MQTT is connected:
+ *   The long side of the LED goes to GPIO 5 of the ESP32.
+ *   Connect the short side of the LED to one leg of the 1K Ohm resistor (both connected to the same row in the breadboard).
+ *   Connect the other leg of the resistor to ground(or "-" of the power supply).
 ***************************************************************************************************/
 #include <WiFi.h>
 #include <BME280I2C.h>
 #include <Wire.h>
-//#include <DHT.h>
 #include <PubSubClient.h>//For sending data to MQTT Server
 #include "time.h"
-
-//#define DHTPIN 13// Pin which is connected to the DHT22 sensor.
-//#define DHTTYPE DHT22// DHT 22 (AM2302)
-
 
 //*****+*+*+*+*+*+*+*+*+*+**************************************************+*+*+*+*+*+*+*+*+*+*****
 //*****+*+*+*+*+*+*+*+*+*+*****************Things to modify*****************+*+*+*+*+*+*+*+*+*+*****
 //*****+*+*+*+*+*+*+*+*+*+**************************************************+*+*+*+*+*+*+*+*+*+*****
-const char* ssid = "{Your network SSID goes between the quotes}";//**********WiFi SSID**********
-const char* password =  "{Your network password goes between the quotes}";//**********SSID Password**********
-const char* mqttUser = "{Your MQTT username goes between the quotes}";
-const char* mqttPassword = "{Your MQTT password goes between the quotes}";
-const char* mqtt_server = "{Your MQTT server IP Address goes between the quotes}";
+const char* ssid = "<Your network SSID>"; //********** WiFi SSID **********
+const char* password =  "<Your network password>"; //********** SSID Password **********
+const char* mqttUser = "<Your MQTT username>";
+const char* mqttPassword = "<Your MQTT password>";
+const char* mqtt_server = "<Your MQTT server IP Address>";
 const int mqttPort = 1883;
-//int delayTime = 4901;//This is adjusted so a cycle happens every 5 seconds(5000 ms)
-int delayTime = 59901;//This is adjusted so a cycle happens every 60 seconds(60000 ms)
-
-//******************************Unique Setting for each board**************************************
-const char* mqttClientID = "ESP32ClientPatio";
-WiFiClient espClientPatio;//**********This is the name of the specific ESP32**********
-PubSubClient client(espClientPatio);//**********This is the name of the specific ESP32**********
-const char* topicPrefix = "apt/patio";//This is specifically for apt/room or area name/xxxxx
-const char* topicRoom = "patio";
-PAddress local_IP({The IP Address of the ESP32 goes between the parenthesis});
-IPAddress gateway({The IP Address of your gateway goes between the parenthesis(Comma seperated)});
-IPAddress subnet({The IP Address of your subnet goes between the parenthesis(Comma seperated)});
-IPAddress dns1(75,75,75,75);//dns1 and dns2 are needed to get local time
-IPAddress dns2(75,75,76,76);//dns1 and dns2 are needed to get local time
+const char* mqttClientID = "ESP32Client";
+WiFiClient espClient; //********** This is the name of the specific ESP32 **********
+PubSubClient client(espClient); //********** This is the name of the specific ESP32 **********
+const char* topicPrefix = "topic1/topic2"; // This is specifically for home/room or area name/xxxxx
+const char* topicRoom = "topic2";
+int delayTime = 59901; // This is adjusted so a cycle happens every 60 seconds(60000 ms)
+IPAddress local_IP(<IP Address of the ESP32>); // Can be any IP Address that is available and allowed on your network (comma seperated values).
+IPAddress gateway(<IP Address of your gateway>); // Typically the IP Address of your router/modem (comma seperated values).
+IPAddress subnet(<IP Address of your subnet>); // Typically 255,255,255,0 (comma seperated values)
+IPAddress dns1(75,75,75,75); // dns1 and dns2 are needed to get local time.
+IPAddress dns2(75,75,76,76); // dns1 and dns2 are needed to get local time.
 //*****+*+*+*+*+*+*+*+*+*+**************************************************+*+*+*+*+*+*+*+*+*+*****
 //*****+*+*+*+*+*+*+*+*+*+*************End of things to modify**************+*+*+*+*+*+*+*+*+*+*****
 //*****+*+*+*+*+*+*+*+*+*+**************************************************+*+*+*+*+*+*+*+*+*+*****
@@ -75,7 +63,6 @@ IPAddress dns2(75,75,76,76);//dns1 and dns2 are needed to get local time
 int d, mo, y;
 int WiFiLed = 2;//**********Pin 2 is the on board blue LED**********
 int mqttLed = 5;//**********This is the pin that the LED is connected to()**********
-int photoresistorPin = 34;
 int lightVal = 0;
 int resetHour, resetMin;
 int resetHTime = 23;
@@ -127,29 +114,27 @@ char minPsiTopic[100], minPsiString[8];
 char minString[4];
 char hourString[4];
 
-//HTU21D htu;
-//DHT htu(DHTPIN, DHTTYPE);
 BME280I2C bme;
 
-//**************************************
-//**************** WiFi ****************
-//**************************************
-void Wifi()
+// Checking WiFi status. If status is not connected, try to reconnect until a connection is established.
+void checkingWifi()
 {
   pinMode(WiFiLed, OUTPUT);
-  if(!WiFi.config(local_IP, gateway, subnet, dns1, dns2)) 
+  if (!WiFi.config(local_IP, gateway, subnet, dns1, dns2)) 
   {
     Serial.println("STA Failed to configure");
   }  
+  
   while (WiFi.status() != WL_CONNECTED)
   {  
+    wifiDisconnected++;
     digitalWrite(WiFiLed, LOW);
     Serial.print("\nConnecting to WiFi");
     WiFi.begin(ssid, password);
     for (int i = 0; i < 20; i++)
     {
       WiFi.begin(ssid, password);
-      delay(1000);//*************************Delay*************************
+      delay(1000); // Wait 1 second and try again.
       Serial.print(".");
       if(WiFi.status() == WL_CONNECTED)
       {
@@ -162,32 +147,31 @@ void Wifi()
     }
     if(WiFi.status() == WL_CONNECTED)
     {
-      digitalWrite(WiFiLed, HIGH);
+      // digitalWrite(WiFiLed, HIGH); (Optional, this turns on the blue on board LED when WiFi is connected.
       Serial.print("\tConnected to ");
       Serial.print(ssid);
       Serial.print(" @ ");
-      Serial.println(WiFi.gatewayIP());
+      Serial.println(WiFi.gatewayIP()); 
       Serial.print("ESP32 IP Address is ");
       Serial.println(WiFi.localIP());
+      wifiConnected++;
     }
   }
 }
 
-//**************************************
-//**************** MQTT ****************
-//**************************************
-void Mqtt()
+// Checking WiFi status. If status is not connected, try to reconnect until a connection is established.
+void checkingMqtt()
 {  
-  pinMode(mqttLed, OUTPUT);
-  client.setServer(mqtt_server, mqttPort);//configure the MQTT server with IPaddress and port
+  pinMode(mqttLed, OUTPUT); // Optional LED to turn on when MQTT is connected.
+  client.setServer(mqtt_server, mqttPort);//configure the MQTT server with IPaddress and port.
   while(!client.connected())
   {
-    digitalWrite(mqttLed, LOW);    
+    mqttDisconnected++;
     client.connect(mqttClientID, mqttUser, mqttPassword, "apt/patio/lastWill", 0, 1, "I'm dying!!", true);
     Serial.print("Connecting to MQTT");
     for (int i = 0; i < 20; i++)
     {
-      delay(1000);//*************************Delay*************************
+      delay(1000); // Wait 1 second and try again.
       Serial.print(".");
       client.connect(mqttClientID, mqttUser, mqttPassword, "apt/patio/lastWill", 0, 1, "I'm dying!!", true);
       if(client.connected())
@@ -199,14 +183,13 @@ void Mqtt()
     {
       Serial.print("\tConnected to MQTT server @ ");
       Serial.println(mqtt_server);
-      digitalWrite(mqttLed, HIGH);
+      // digitalWrite(mqttLed, HIGH); // Optional LED to turn on when MQTT is connected.
+      mqttConnected++;      
     }
    }
 }
 
-//*****************************************
-//**********Printing MAC Address***********
-//*****************************************
+// Printing MAC Address to console.
 void printEspInfo()
 {
   WiFi.macAddress(mac);
@@ -222,31 +205,9 @@ void printEspInfo()
   Serial.print(mac[1],HEX);
   Serial.print(":");
   Serial.println(mac[0],HEX);
-  Wire.begin();
-
-  while(!bme.begin())
-  {
-    Serial.println("Could not find BME280 sensor!");
-    delay(1000);
-  }
-
-  // bme.chipID(); // Deprecated. See chipModel().
-  switch(bme.chipModel())
-  {
-     case BME280::ChipModel_BME280:
-       Serial.println("Found BME280 sensor! Success.");
-       break;
-     case BME280::ChipModel_BMP280:
-       Serial.println("Found BMP280 sensor! No Humidity available.");
-       break;
-     default:
-       Serial.println("Found UNKNOWN sensor! Error!");
-  }
 }
 
-//*********************************************************************************
-//******************Sending to MQTT Topic Prefix (ex. apt/xxxxx)*******************
-//*********************************************************************************
+// Printing the topic prefix (ex. home/room) to console 
 void printPrefix()
 {   
   const char* specificMsgTopic = "/message";
@@ -260,22 +221,19 @@ void printPrefix()
   Serial.println(msgPayload);
 }
 
-//***********************************************************************************************
-//****************Printing to serial and sending to MQTT the number of data points***************
-//***********************************************************************************************
-void printCycleCounter()
+// Calculating the number of data points that have been taken since the begining.
+void printLoopCounter()
 {
-  const char* specificCycleTopic = "/dataPts";
-  strcpy(cycleTopic, topicPrefix);
-  strcat(cycleTopic, specificCycleTopic);
+  loopCounter++;
+  const char* specificLoopTopic = "/dataPts";
+  strcpy(loopTopic, topicPrefix);
+  strcat(loopTopic, specificLoopTopic);
   Serial.print("Total Cycles: ");
-  dtostrf(cycleCounter, 1, 0, cycleString);
-  Serial.println(cycleString);
+  dtostrf(loopCounter, 1, 0, loopString);
+  Serial.println(loopString);
 }  
 
-//********************************************************************************
-//**************Printing to serial and sending to MQTT a Timestamp****************
-//********************************************************************************
+// Getting the curent day of the week, the current date, and the current time of day.
 void printLocalTime()
 {
   const char* specificWDayTopic = "/day";
@@ -294,6 +252,8 @@ void printLocalTime()
     return;
   }
   char secString[4];
+  char minString[4];
+  char hourString[4];
   char dayString[4];
   char monthString[4];
   char yearString[6];
@@ -302,13 +262,12 @@ void printLocalTime()
   const char space[2] = " ";
   const char dash[2] = "-";
   char zero[2] = "0";
+  int s, m, h, d, mo, y;
   s = timeinfo.tm_sec;
   itoa(s, secString, 10);
   m = timeinfo.tm_min;
-  resetMin = m;
   itoa(m, minString, 10);
   h = timeinfo.tm_hour;
-  resetHour = h;
   itoa(h, hourString, 10);
   d = timeinfo.tm_mday;
   itoa(d, dayString, 10);
@@ -397,15 +356,12 @@ void printLocalTime()
   Serial.println(timeStamp);
 }
 
-//********************************************************************************
-//********Printing to serial and sending to MQTT Temperature in Farenheit*********
-//********************************************************************************
+// Reading the temperature from the sensor, then returning it in Farenheit.
 double printTemp()
 {
   const char* specificTempTopic = "/temp";
   strcpy(tempTopic, topicPrefix);
   strcat(tempTopic, specificTempTopic);
-//  double f = htu.readTemperature(true);
   float temper(NAN), humi(NAN), pres(NAN);
   BME280::TempUnit tempUnit(BME280::TempUnit_Fahrenheit);
   BME280::PresUnit presUnit(BME280::PresUnit_hPa);
@@ -429,9 +385,7 @@ double printTemp()
   }
 }
 
-//************************************************************************************
-//******************Printing to serial Avg Temperature in Farenheit*******************
-//************************************************************************************
+// Calaulating the average temperature, in Farenheit.
 void avgTemp(double f)
 {
   if (!isnan(f) || tempString == "nan")
@@ -440,14 +394,14 @@ void avgTemp(double f)
     strcpy(avgTempTopic, topicPrefix);
     strcat(avgTempTopic, specificTempTopic);
     avgTCalc = avgTCalc + f;
-    if (cycleCounter == 1)
+    if (loopCounter == 1)
     {
       avgT = f;
       avgTCalc = f;     
     }
     else
     {
-      avgT = avgTCalc / cycleCounter;
+      avgT = avgTCalc / loopCounter;
     }
     dtostrf(avgT, 1, 2, avgTempString);// Convert the value to a char array
     Serial.print("Avg Temp is: ");
@@ -456,9 +410,7 @@ void avgTemp(double f)
   }
 }
 
-//************************************************************************************
-//******************Printing to serial Max Temperature in Farenheit*******************
-//************************************************************************************
+// Calculating the max temperature, in Farenheit.
 void calcMaxTemp(double f)
 {
   const char* specificTempTopic = "/maxTemp";
@@ -468,12 +420,10 @@ void calcMaxTemp(double f)
   dtostrf(maxT, 1, 2, maxTempString);// Convert the value to a char array
   Serial.print("Max Temp is: ");
   Serial.print(maxTempString);
-  Serial.print("*F\t\t");  
+  Serial.print("*F\t\t");
 }
 
-//******************************************************************************************
-//******************Printing to serial Daily Max Temperature in Farenheit*******************
-//******************************************************************************************
+// Calculating the the max temperature, in Farenheit, of the current day.
 void calcMaxTempToday(double f)
 {
   const char* specificTempTopic = "/maxTempToday";
@@ -485,22 +435,12 @@ void calcMaxTempToday(double f)
   }
   maxTToday = max(maxTToday, f);
   dtostrf(maxTToday, 1, 2, maxTempTodayString);// Convert the value to a char array
-/*  Serial.print("resetHour is ");
-  Serial.println(resetHour);
-  Serial.print("resetHTime is ");
-  Serial.println(resetHTime);
-  Serial.print("resetMin is ");
-  Serial.println(resetMin);
-  Serial.print("resetMTime is ");
-  Serial.println(resetMTime);*/
   Serial.print("Max Temp Today is: ");
   Serial.print(maxTempTodayString);
   Serial.print("*F\t");
 }
 
-//************************************************************************************
-//******************Printing to serial Min Temperature in Farenheit*******************
-//************************************************************************************
+// Calculating the min temperature, in Farenheit.
 void calcMinTemp(double f)
 {
   if(f != 0)
@@ -516,9 +456,7 @@ void calcMinTemp(double f)
   }
 }
 
-//******************************************************************************************
-//******************Printing to serial Daily Min Temperature in Farenheit*******************
-//******************************************************************************************
+// Calculating the the min temperature, in Farenheit, of the current day.
 void calcMinTempToday(double f)
 {
   const char* specificTempTopic = "/minTempToday";
@@ -535,15 +473,12 @@ void calcMinTempToday(double f)
   Serial.print("*F\t");
 }
 
-//********************************************************************************
-//********************Printing to serial Humidity in Percent**********************
-//********************************************************************************
+// Reading the humidity percent from the sensor.
 double printHum()
 {
   const char* specificHumTopic = "/hum";
   strcpy(humTopic, topicPrefix);
   strcat(humTopic, specificHumTopic);
-//  double h = htu.readHumidity();
   float temper(NAN), humi(NAN), pres(NAN);
   BME280::TempUnit tempUnit(BME280::TempUnit_Fahrenheit);
   BME280::PresUnit presUnit(BME280::PresUnit_hPa);
@@ -563,9 +498,7 @@ double printHum()
   }
 }
 
-//************************************************************************************
-//********************Printing to serial Avg Humidity in Percent**********************
-//************************************************************************************
+// Calculating the average humidity percent.
 void avgHum(double h)
 {
   if (!isnan(h) || humString == "nan")
@@ -574,25 +507,23 @@ void avgHum(double h)
     strcpy(avgHumTopic, topicPrefix);
     strcat(avgHumTopic, specificHumTopic);
     avgHCalc = avgHCalc + h;
-    if (cycleCounter == 1)
+    if (loopCounter == 1)
     {
       avgH = h;
       avgHCalc = h;     
     }
     else
     {
-      avgH = avgHCalc / cycleCounter;
+      avgH = avgHCalc / loopCounter;
     }
     dtostrf(avgH, 1, 2, avgHumString);// Convert the value to a char array
     Serial.print("Avg Hum is: ");
     Serial.print(avgH);
-    Serial.print("%\t\t");
+    Serial.println("%");
   }
 }
 
-//************************************************************************************
-//********************Printing to serial Max Humidity in Percent**********************
-//************************************************************************************
+// Calculating the max humidity percent.
 void calcMaxHum(double h)
 {
   const char* specificHumTopic = "/maxHum";
@@ -602,12 +533,10 @@ void calcMaxHum(double h)
   dtostrf(maxH, 1, 2, maxHumString);// Convert the value to a char array
   Serial.print("Max Hum is: ");
   Serial.print(maxH);
-  Serial.print("%\t\t");
+  Serial.println("%");
 }
 
-//*************************************************************************************
-//******************Printing to serial Daily Max Humidity in Percent*******************
-//*************************************************************************************
+// Calculating the the max humidity percent of the current day.
 void calcMaxHumToday(double h)
 {
   const char* specificHumTopic = "/maxHumToday";
@@ -624,10 +553,7 @@ void calcMaxHumToday(double h)
   Serial.println("%");
 }
 
-
-//************************************************************************************
-//********************Printing to serial Min Humidity in Percent**********************
-//************************************************************************************
+// Calculating the the min humidity percent.
 void calcMinHum(double h)
 {
   const char* specificHumTopic = "/minHum";
@@ -637,12 +563,10 @@ void calcMinHum(double h)
   dtostrf(minH, 1, 2, minHumString);// Convert the value to a char array
   Serial.print("Min Hum is: ");
   Serial.print(minH);
-  Serial.print("%\t\t");
+  Serial.println("%");
 }
 
-//*************************************************************************************
-//******************Printing to serial Daily Min Humidity in Percent*******************
-//*************************************************************************************
+// Calculating the the max humidity percent of the current day.
 void calcMinHumToday(double h)
 {
   const char* specificHumTopic = "/minHumToday";
@@ -659,9 +583,7 @@ void calcMinHumToday(double h)
   Serial.println("%");
 }
 
-//********************************************************************************
-//************Printing to serial and sending to MQTT Pressure in hPa**************
-//********************************************************************************
+// Reading the pressure from the sensor, then returning it in hPa.
 double printPsi()
 {
   const char* specificPsiTopic = "/psi";
@@ -690,9 +612,7 @@ double printPsi()
   }
 }
 
-//************************************************************************************
-//***********************Printing to serial Avg Pressure in hPa***********************
-//************************************************************************************
+// Calculating the Avg Pressure, in hPa.
 void avgPsi(double p)
 {
   if (!isnan(p) || psiString == "nan")
@@ -717,9 +637,7 @@ void avgPsi(double p)
   }
 }
 
-//************************************************************************************
-//**********************Printing to serial Max Pressure in hPa************************
-//************************************************************************************
+// Calculating the max pressure, in hPa.
 void calcMaxPsi(double p)
 {
   const char* specificPsiTopic = "/maxPsi";
@@ -732,9 +650,7 @@ void calcMaxPsi(double p)
   Serial.println("hPa");
 }
 
-//************************************************************************************
-//***********************Printing to serial Min Pressure in hPa***********************
-//************************************************************************************
+// Calculating the min pressure, in hPa.
 void calcMinPsi(double p)
 {
   if(p != 0)
@@ -750,9 +666,7 @@ void calcMinPsi(double p)
   }
 }
 
-//********************************************************************************
-//******************Printing to serial and sending to MQTT RSSI*******************
-//********************************************************************************
+// Reading the current RSSI.
 double printRssi()
 {
   const char* specificRssiTopic = "/rssi";
@@ -766,9 +680,7 @@ double printRssi()
   return rssi;
 }
 
-//*****************************************************************************************************
-//***********************Printing to serial and send to MQTT Avg Pressure in hPa***********************
-//*****************************************************************************************************
+// Calculating the average RSSI.
 void calcAvgRssi(int rssi)
 {
   if (!isnan(rssi) || rssiString == "nan")
@@ -777,14 +689,14 @@ void calcAvgRssi(int rssi)
     strcpy(avgRssiTopic, topicPrefix);
     strcat(avgRssiTopic, specificAvgRssiTopic);
     avgRssiCalc = avgRssiCalc + rssi;
-    if (cycleCounter == 1)
+    if (loopCounter == 1)
     {
       avgRssi = rssi;
       avgRssiCalc = rssi;     
     }
     else
     {
-      avgRssi = avgRssiCalc / cycleCounter;
+      avgRssi = avgRssiCalc / loopCounter;
     }
     dtostrf(avgRssi, 1, 2, avgRssiString);// Convert the value to a char array
     Serial.print("Avg RSSI is: ");
@@ -793,9 +705,7 @@ void calcAvgRssi(int rssi)
   }
 }
 
-//*******************************************************************************************
-//******************Printing to serial and sending to MQTT Max RSSI in dBm*******************
-//*******************************************************************************************
+// Calculating the max RSSI.
 void calcMaxRssi(double rssi)
 {
   const char* specificMaxRssiTopic = "/maxRssi";
@@ -808,9 +718,7 @@ void calcMaxRssi(double rssi)
   Serial.println("dBm");  
 }
 
-//*****************************************************************************************************
-//***********************Printing to serial and send to MQTT Min Pressure in hPa***********************
-//*****************************************************************************************************
+// Calculating the the min RSSI.
 void calcMinRssi(double rssi)
 {
   if(rssi != 0)
@@ -826,30 +734,11 @@ void calcMinRssi(double rssi)
   }
 }
 
-//*******************************************************************************************
-//****************Printing to serial and sending to MQTT Counting elapsed time***************
-//*******************************************************************************************
+// Calculating the elapsed time since data started to be taken.
 void printElapsedTime()
 {
-  struct tm timeinfo;
-  int second = 0;
-  int minute = 0;
-  int hour = 0;
-  if(!getLocalTime(&timeinfo))
-  {
-    Serial.println("Failed to obtain time");
-    return;
-  }
-  if(cycleCounter == 1)
-  {
-    ssec = timeinfo.tm_sec;
-    m = 0;
-    h = 0;
-  }
-  else
-  {
-    s = (cycleCounter - 1) * 60 + (timeinfo.tm_sec - ssec);
-  }
+  s = millis();
+  s = s / 1000;
   second = s;
   if(s > 59)
   {
@@ -899,119 +788,39 @@ void printElapsedTime()
   Serial.println(elapsedTimeString);
 }
 
-
-//*******************************************************************************
-//**********************Printing to serial MQTT Light Value**********************
-//*******************************************************************************
-double printLightValue()
-{
-  const char* specificLightValTopic = "/lightVal";
-  strcpy(lightValTopic, topicPrefix);
-  strcat(lightValTopic, specificLightValTopic);
-  lightVal = analogRead(photoresistorPin);
-  lightVal = lightVal / 40.95;//Calibration factor
-  Serial.print("The value of light is: ");
-  dtostrf(lightVal, 1, 0, lightValString);
-  Serial.print(lightValString);
-  Serial.println("%");
-  return lightVal;
-}
-
-//************************************************************************************
-//************************Printing to serial Avg Light Value**************************
-//************************************************************************************
-void avgLightVal(int lightVal)
-{
-  if (!isnan(lightVal))
-  {
-    const char* specificAvgLightValTopic = "/avgLightVal";
-    strcpy(avgLightValTopic, topicPrefix);
-    strcat(avgLightValTopic, specificAvgLightValTopic);
-    avgLCalc = avgLCalc + lightVal;
-    if(lightVal == 0)
-    {
-      avgL = avgL;
-    }
-    else
-    {
-      if (cycleCounter == 1)
-      {
-        avgL = lightVal;
-        avgLCalc = lightVal;     
-      }
-      else
-      {
-        avgL = avgLCalc / cycleCounter;
-      }
-    }
-    dtostrf(avgL, 1, 2, avgLightValString);// Convert the value to a char array
-    Serial.print("The avg value of light is: ");
-    Serial.print(avgLightValString);
-    Serial.println("%");
-  }
-}
-
-//************************************************************************************
-//************************Printing to serial Max Light Value**************************
-//************************************************************************************
-void calcMaxLightVal(int lightVal)
-{
-  const char* specificMaxLightValTopic = "/maxLightVal";
-  strcpy(maxLightValTopic, topicPrefix);
-  strcat(maxLightValTopic, specificMaxLightValTopic);
-  maxL = max(maxL, lightVal);
-  dtostrf(maxL, 1, 0, maxLightValString);// Convert the value to a char array
-  Serial.print("Max value of light is: ");
-  Serial.print(maxLightValString);
-  Serial.println("%;  ");
-}
-
-//***************************************************
-//********Publishing data to the MQTT Server*********
-//***************************************************
+// Publishing data to the MQTT server.
 void publishToMqtt()
 {
-  client.publish(msgTopic, msgPayload);//client.publish(const char[], const char[])
+  client.publish(msgTopic, msgPayload);
   client.publish(cycleTopic, cycleString);
-  client.publish(tempTopic, tempString);//Publish the value to the MQTT Server
-  client.publish(avgTempTopic, avgTempString);//Publish the value to the MQTT Server
-  client.publish(maxTempTopic, maxTempString);//Publish the value to the MQTT Server
-  client.publish(maxTempTodayTopic, maxTempTodayString);//Publish the value to the MQTT Server
-  client.publish(minTempTopic, minTempString);//Publish the value to the MQTT Server
-  client.publish(minTempTodayTopic, minTempTodayString);//Publish the value to the MQTT Server
-  client.publish(humTopic, humString);//Publish the value to the MQTT Server 
-  client.publish(avgHumTopic, avgHumString);//Publish the value to the MQTT Server 
-  client.publish(maxHumTopic, maxHumString);//Publish the value to the MQTT Server 
-  client.publish(maxHumTodayTopic, maxHumTodayString);//Publish the value to the MQTT Server 
-  client.publish(minHumTopic, minHumString);//Publish the value to the MQTT Server 
-  client.publish(minHumTodayTopic, minHumTodayString);//Publish the value to the MQTT Server 
-  client.publish(psiTopic, psiString);//Publish the value to the MQTT Server
-  client.publish(avgPsiTopic, avgPsiString);//Publish the value to the MQTT Server 
-  client.publish(maxPsiTopic, maxPsiString);//Publish the value to the MQTT Server 
-  client.publish(minPsiTopic, minPsiString);//Publish the value to the MQTT Server 
+  client.publish(tempTopic, tempString);
+  client.publish(avgTempTopic, avgTempString);
+  client.publish(maxTempTopic, maxTempString);
+  client.publish(maxTempTodayTopic, maxTempTodayString);
+  client.publish(minTempTopic, minTempString);
+  client.publish(minTempTodayTopic, minTempTodayString);
+  client.publish(humTopic, humString);
+  client.publish(avgHumTopic, avgHumString);
+  client.publish(maxHumTopic, maxHumString);
+  client.publish(maxHumTodayTopic, maxHumTodayString);
+  client.publish(minHumTopic, minHumString);
+  client.publish(minHumTodayTopic, minHumTodayString);
+  client.publish(psiTopic, psiString);
+  client.publish(avgPsiTopic, avgPsiString);
+  client.publish(maxPsiTopic, maxPsiString);
+  client.publish(minPsiTopic, minPsiString);
   client.publish(rssiTopic, rssiString);
-  client.publish(avgRssiTopic, avgRssiString);//Publish the value to the MQTT Server 
-  client.publish(maxRssiTopic, maxRssiString);//Publish the value to the MQTT Server 
-  client.publish(minRssiTopic, minRssiString);//Publish the value to the MQTT Server 
-  client.publish(lightValTopic, lightValString);
-  client.publish(avgLightValTopic, avgLightValString);
-  client.publish(maxLightValTopic, maxLightValString);
+  client.publish(avgRssiTopic, avgRssiString);
+  client.publish(maxRssiTopic, maxRssiString);
+  client.publish(minRssiTopic, minRssiString);
   client.publish(wDayTopic, wDayString);
   client.publish(dateTopic, dateStamp);
   client.publish(timeTopic, timeStamp);
   client.publish(elapsedTimeTopic, elapsedTimeString);
   client.loop();  //Running the PubSub Loop
-/*  client.disconnect();
-  if (client.connected())
-  {
-    client.disconnect();
-    delay(500);
-  }*/
 }
 
-//*******************************************
-//********Printing MQTT Server State*********
-//*******************************************
+// Reading the current MQTT Server State
 void printState()
 {
   Serial.print("The current state of the MQTT Client is: ");
@@ -1051,23 +860,96 @@ void printState()
   }
 }
 
+// Keeping track of how many times wifiConnected has happened.
+void printWifiConnected()
+{
+  const char* specificWifiConTopic = "/wifiCon";
+  strcpy(wifiConTopic, topicPrefix);
+  strcat(wifiConTopic, specificWifiConTopic);
+  Serial.print("WiFi has Conected to the server ");
+  dtostrf(wifiConnected, 1, 0, wifiConnectedString);// Convert the value to a char array
+  Serial.print(wifiConnectedString);
+  if(wifiConnected == 1)
+  {
+    Serial.println(" time");
+  }
+  else
+  {
+    Serial.println(" times");
+  }
+}
+
+// Keeping track of how many times wifiDisconnected has happened.
+void printWifiDisconnected()
+{
+  const char* specificWifiDisTopic = "/wifiDiscon";
+  strcpy(wifiDisTopic, topicPrefix);
+  strcat(wifiDisTopic, specificWifiDisTopic);
+  Serial.print("Wifi has disconnected from the server ");
+  dtostrf(wifiDisconnected, 1, 0, wifiDisconnectedString);// Convert the value to a char array
+  Serial.print(wifiDisconnectedString);
+  if(wifiDisconnected == 1)
+  {
+    Serial.println(" time");
+  }
+  else
+  {
+    Serial.println(" times");
+  }
+}
+
+// Keeping track of how many times mqttConnected has happened.
+void printMqttConnected()
+{
+  const char* specificMqttConTopic = "/mqttCon";
+  strcpy(mqttConTopic, topicPrefix);
+  strcat(mqttConTopic, specificMqttConTopic);
+  Serial.print("MQTT has Conected to the server ");
+  dtostrf(mqttConnected, 1, 0, mqttConnectedString);// Convert the value to a char array
+  Serial.print(mqttConnectedString);
+  if(mqttConnected == 1)
+  {
+    Serial.println(" time");
+  }
+  else
+  {
+    Serial.println(" times");
+  }
+}
+
+// Keeping track of how many times mqttDisconnected has happened.
+void printMqttDisconnected()
+{
+  const char* specificMqttDisTopic = "/mqttDiscon";
+  strcpy(mqttDisTopic, topicPrefix);
+  strcat(mqttDisTopic, specificMqttDisTopic);
+  Serial.print("MQTT has disconnected from the server ");
+  dtostrf(mqttDisconnected, 1, 0, mqttDisconnectedString);// Convert the value to a char array
+  Serial.print(mqttDisconnectedString);
+  if(mqttDisconnected == 1)
+  {
+    Serial.println(" time");
+  }
+  else
+  {
+    Serial.println(" times");
+  }
+}
+
+// The setup function, start serial, htu temp/humidity/pressure sensor, and print the device MAC address.
 void setup(){
   Serial.begin(115200);
-  pinMode(photoresistorPin, INPUT);
-//  htu.begin();
   Wire.begin();
   bme.begin();
   printEspInfo();
 }
+
+// The loop function checks WiFi connection, MQTT connection, and calls the temp, humidity, pressure, RSSI, some time realated functions, and a loop counter.
 void loop() {
-  ++cycleCounter;
-  Wifi();
-  Mqtt();
+  checkingWifi();
+  checkingMqtt();
   printPrefix();
-  printCycleCounter();
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  printLocalTime();
-  printElapsedTime();
+  printLoopCounter();
   double f = printTemp();
   double h = printHum();
   double p = printPsi();
@@ -1091,9 +973,13 @@ void loop() {
   calcAvgRssi(rssi);
   calcMaxRssi(rssi);
   calcMinRssi(rssi);
-  int lightVal = printLightValue();
-  avgLightVal(lightVal);
-  calcMaxLightVal(lightVal);
+  printElapsedTime();
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  printLocalTime();
+  printWifiConnected();
+  printWifiDisconnected();
+  printMqttConnected();
+  printMqttDisconnected();
   publishToMqtt();
   printState();
   delay(delayTime);
