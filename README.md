@@ -1,4 +1,4 @@
-# Temperature and Humidity(BME280 Sensor) using an ESP32 that Broadcasts Data Over MQTT
+# Temperature, Humidity, and Pressure(BME280 Sensor) using an ESP32 that Broadcasts Data Over MQTT
 
 ### Description:
 This program was written with the intent to measure temperature, humidity, and pressure using an 
