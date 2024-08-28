@@ -44,7 +44,7 @@ published and it also sends the messages to Home Assistant.
 
 - #### Setup:
     * Clone the repository by opening a terminal on personal PC that has the Arduino IDE installed on it and type: `git clone https://github.com/KColagiovanni/Temperature_and_Humidity_using_ESP32_and_BME280_Sensor.git`
-    * Using the file explorer navigate to the Temperature_and_Humidity_using_ESP32_and_BME280_Sensor directory and double click on the Temp_and_Hum_to_MQTT-ESP32_and_BME_sensor.ino file. This should open up a new Arduino IDE window.
+    * Using the file explorer navigate to the Temperature_Humidity_andPressue_using_ESP32_and_BME280_Sensor directory and double click on the Temp_Hum_and_Psi_using_ESP32_and_BME280_sensor.ino file. This should open up a new Arduino IDE window.
     * [Install the ESP32 board add-on](https://randomnerdtutorials.com/installing-the-esp32-board-in-arduino-ide-windows-instructions/) to Arduino IDE.
         * Install the BME package to the Arduino IDE by going to *Tools* > *Manage Libraries* and search for the *BME280* library, then click on install.
         * Install the PubSubCLient package to the Arduino IDE (used for MQTT communication) by going to *Tools* > *Manage Libraries* and search for *PubSubClient*, then click on install.
