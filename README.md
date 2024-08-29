@@ -54,5 +54,5 @@ published and it also sends the messages to Home Assistant.
 
   ### How to Use
     * Connect the ESP32 to the personal PC using a USB A to Micro USB cable.
-    * Select *Upload* in the upper left corner of the Arduino IDE. It is a circular button wit an arrow pointing right.
-    * Once the sketch is uploaded, power cycle the ESP32 and open the serial monitor to see board output by clicking on the maqnifiying glass icon in the upper right corner. Note: the ESP may need to be power cycled after this to see data being displayed.
+    * Select *Upload* in the upper left corner of the Arduino IDE. It is a circular button with an arrow pointing right.
+    * Once the sketch is uploaded, power cycle the ESP32 and open the serial monitor to see board output by clicking on the magnifying glass icon in the upper right corner. Note: the ESP may need to be power cycled after this to see data being displayed.
